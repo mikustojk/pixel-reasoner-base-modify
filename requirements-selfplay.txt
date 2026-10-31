@@ -1,0 +1,12 @@
+# Separate environment recommended; do not blindly replace the existing evaluation environment.
+torch
+transformers>=4.57,<5
+Pillow
+numpy
+openai
+pyarrow
+safetensors
+# Production multi-GPU ZeRO-2 backend (not needed for CPU unit checks):
+deepspeed
+# Frozen multimodal judge server:
+vllm
