@@ -40,6 +40,9 @@ def indices(n,rank,world,seed):
 
 
 def acquisition_group(engine,q,judge,cfg,crop_dir,version,group_id,online_p2=False):
+    single_crop=cfg.get('single_crop_only',False)
+    if single_crop and (cfg['max_rounds']!=1 or cfg.get('probe_crops_per_group',0)!=0):
+        raise ValueError('Single-crop training requires one round and no probe crops.')
     groups=[];rewards=[];eligible=[];bank=[];traces=[]
     evidence_source='current_shared_p2' if online_p2 else 'bootstrap_judge'
 
@@ -52,19 +55,19 @@ def acquisition_group(engine,q,judge,cfg,crop_dir,version,group_id,online_p2=Fal
             padding.parent.mkdir(parents=True,exist_ok=True)
             if not padding.exists():Image.new('RGB',(28,28),'gray').save(padding)
             images=[str(padding)]
-        return verification_messages(q.question,q.options,Evidence(tuple(images)))
+        return verification_messages(q.question,q.options,Evidence(tuple(images)),single_crop)
 
     for sample_index in range(cfg['group_size']):
         own=[];evidence=[];area=0.;ended=False;invalid=False;ok=True;decision=None;correct=False
         samples=[]
         for turn in range(cfg['max_rounds']):
-            messages=acquisition_messages(q.question,q.image,q.options,own,Feedback(True))
+            messages=acquisition_messages(q.question,q.image,q.options,own,Feedback(True),cfg.get('crop_coordinate_mode','normalized'),single_crop)
             sample=engine.sample(messages,'crop',not ended);samples.append(sample)
             active=not ended
             if active:
                 own.append(sample.text)
                 try:
-                    box=parse_crop(sample.text)
+                    box=parse_crop_for_image(sample.text,q.image,cfg.get('crop_coordinate_mode','normalized'))
                     image,fraction=crop_pixels(q.image,box,crop_dir,cfg['min_crop_side'])
                     evidence.append(image);area+=fraction
                     traces.append({'event':'crop_accepted','candidate':sample_index,'turn':turn})
@@ -78,7 +81,7 @@ def acquisition_group(engine,q,judge,cfg,crop_dir,version,group_id,online_p2=Fal
             if not active:continue
             error_event='evidence_error'
             try:
-                if online_p2:decision=parse_decision(raw)
+                if online_p2:decision=parse_decision(raw,single_crop)
                 else:decision,raw=judge.judge(q.question,q.options,Evidence(tuple(evidence)))
                 bank.append({'qid':q.qid,'question':q.question,'options':q.options,'reference':q.reference,
                              'evidence':list(evidence),'label':decision.evidence_label,'quality':decision.quality,
@@ -91,6 +94,8 @@ def acquisition_group(engine,q,judge,cfg,crop_dir,version,group_id,online_p2=Fal
                     error_event='answer_error'
                     raw=None  # An API failure must not be attributed to the previous evidence reply.
                     correct=judge.answer_correct(common_text(q.question,q.options),q.reference,decision.answer,cfg['answer_mode'])
+                    ended=True
+                elif single_crop:
                     ended=True
             except Exception as error:
                 ok=False;ended=True
@@ -133,17 +138,18 @@ def acquisition_group(engine,q,judge,cfg,crop_dir,version,group_id,online_p2=Fal
 
 def verification_group(engine,record,judge,cfg):
     groups=[];rewards=[];eligible=[];traces=[]
-    messages=verification_messages(record['question'],record['options'],Evidence(tuple(record['evidence'])))
+    single_crop=cfg.get('single_crop_only',False)
+    messages=verification_messages(record['question'],record['options'],Evidence(tuple(record['evidence'])),single_crop)
     for _ in range(cfg['group_size']):
         sample=engine.sample(messages,'decision');decision=None;ok=True;correct=False
-        try:decision=parse_decision(sample.text)
+        try:decision=parse_decision(sample.text,single_crop)
         except (ValueError,TypeError,json.JSONDecodeError) as error:
             traces.append(response_error('invalid_decision',error,sample.text))
         if decision is not None and decision.action=='answer' and record['label']=='sufficient':
             try:correct=judge.answer_correct(common_text(record['question'],record['options']),record['reference'],decision.answer,cfg['answer_mode'])
             except Exception as error:
                 ok=False;traces.append(response_error('answer_error',error))
-        reward=p2_reward(decision,record['label'],record['quality'],record['confidence'],correct,cfg)
+        reward=p2_reward(decision,record['label'],record['quality'],record['confidence'],correct,cfg,single_crop)
         groups.append([sample]);rewards.append(reward);eligible.append(ok)
         traces.append({'p2_private_output':sample.text,'reward':reward,'eligible':ok})
     return groups,rewards,eligible,[],traces
@@ -156,6 +162,10 @@ def main():
     parser.add_argument('--output',required=True,type=Path);parser.add_argument('--judge-url',required=True)
     parser.add_argument('--judge-version',required=True);parser.add_argument('--cycle',required=True,type=int)
     args=parser.parse_args();cfg=json.loads(args.config.read_text())
+    single_crop=cfg.get('single_crop_only',False)
+    if single_crop and (cfg['max_rounds']!=1 or cfg.get('probe_crops_per_group',0)!=0):
+        raise ValueError('Single-crop training requires one round and no probe crops.')
+    prompt_protocol=(PROMPT_PROTOCOL_PIXEL_SINGLE if cfg.get('crop_coordinate_mode','normalized')=='pixel' else PROMPT_PROTOCOL_SINGLE) if single_crop else (PROMPT_PROTOCOL_PIXEL if cfg.get('crop_coordinate_mode','normalized')=='pixel' else PROMPT_PROTOCOL)
     world=int(os.environ.get('WORLD_SIZE','1'));rank=int(os.environ.get('RANK','0'))
     if world>1:dist.init_process_group('nccl' if torch.cuda.is_available() else 'gloo')
     if torch.cuda.is_available():torch.cuda.set_device(int(os.environ.get('LOCAL_RANK','0')))
@@ -175,14 +185,14 @@ def main():
     if cfg['groups_per_phase']>0:order=order[:cfg['groups_per_phase']]
     steps=cfg['group_size']*(cfg['max_rounds'] if args.role=='p1' else 1)
     engine=Engine(cfg,args.model,steps)
-    judge=FrozenJudge(args.judge_url,'eav_judge',args.judge_version,timeout=cfg['judge_timeout'])
+    judge=FrozenJudge(args.judge_url,'eav_judge',args.judge_version,timeout=cfg['judge_timeout'],single_crop=single_crop)
     online_p2=args.cycle>1
     print(json.dumps({'role':args.role,'cycle':args.cycle,'world_size':world,'rank':rank,
                      'dataset_records':len(data),'local_groups':len(order),
                      'global_prompt_groups_per_step':world,'rollouts_per_prompt':cfg['group_size'],
                      'deepspeed_sequence_batch':steps*world,
                      'evidence_evaluator':'current_shared_p2' if online_p2 else 'bootstrap_judge',
-                     'prompt_protocol':PROMPT_PROTOCOL,
+                     'prompt_protocol':prompt_protocol,
                      'training_protocol':TRAINING_PROTOCOL}),flush=True)
     updates=0;metrics=[];diagnostic_totals=Counter();reason_totals=Counter()
     for step,index in enumerate(order):
@@ -201,11 +211,11 @@ def main():
         diagnostic_totals.update({k:v for k,v in diagnostics.items() if k!='error_reasons'})
         update=engine.update(groups,rewards,eligible);updates+=int(update['updated'])
         metric={'group':key,'role':args.role,'rewards':rewards,'eligible':eligible,
-                'prompt_protocol':PROMPT_PROTOCOL,'format_diagnostics':diagnostics,**update}
+                'prompt_protocol':prompt_protocol,'format_diagnostics':diagnostics,**update}
         metrics.append(metric);write_json(progress,{'groups_completed':step+1,'updates':updates})
         print(json.dumps(metric,ensure_ascii=False),flush=True)
     write_json(args.output/f'format_summary_rank{rank}.json',
-               {'rank':rank,'role':args.role,'prompt_protocol':PROMPT_PROTOCOL,
+               {'rank':rank,'role':args.role,'prompt_protocol':prompt_protocol,
                 'groups_completed':len(metrics),'optimizer_updates':updates,
                 **dict(diagnostic_totals),'error_reasons':dict(reason_totals)})
     count=torch.tensor([updates],device=engine.device)
@@ -215,12 +225,12 @@ def main():
     if rank==0:
         bank=[]
         for f in sorted((args.output/'bank_groups').glob('*.json')):bank.extend(json.loads(f.read_text()))
-        with (args.output/'evidence_bank.jsonl').open('w') as f:
+        with (args.output/'evidence_bank.jsonl').open('w',encoding='utf-8') as f:
             for record in bank:f.write(json.dumps(record,ensure_ascii=False,allow_nan=False)+'\n')
         write_json(args.output/'phase_done.json',{'role':args.role,'cycle':args.cycle,'model_input':args.model,
                    'policy_architecture':'shared_policy_roles_v1',
                    'training_protocol':TRAINING_PROTOCOL,
-                   'prompt_protocol':PROMPT_PROTOCOL,
+                   'prompt_protocol':prompt_protocol,
                    'checkpoint':str((args.output/'hf').resolve()),'data_sha256':digest(args.data),
                    'judge_version':args.judge_version,'world_size':world,'optimizer_updates_per_rank':updates,
                    'bank_records':len(bank),'metrics':metrics,'optimizer_state_policy':'Saved for audit; each new alternating phase uses a fresh optimizer.'})

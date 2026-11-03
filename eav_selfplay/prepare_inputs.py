@@ -54,7 +54,7 @@ def main():
                     if not args.skip_invalid:
                         write_json(args.output/'errors.json',errors);raise
     for name,data in [('train',train),('heldout',held)]:
-        with (args.output/(name+'.jsonl')).open('w') as f:
+        with (args.output/(name+'.jsonl')).open('w',encoding='utf-8') as f:
             for r in data:f.write(json.dumps(r,ensure_ascii=False)+'\n')
     write_json(args.output/'manifest.json',{'sources':{str(p):digest(p) for p in args.parquet},'train':len(train),'heldout':len(held),'invalid':len(errors),
                 'policy':'Image-grouped deterministic split; no rationale/tool trajectory copied. Existing benchmark evaluations are not automatically added.'})

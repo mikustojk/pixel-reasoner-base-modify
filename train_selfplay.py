@@ -23,10 +23,13 @@ def validate(cfg):
     for key in ['policy_model','judge_model']:
         if not (Path(cfg[key])/'config.json').is_file():raise ValueError('Missing model '+key)
     if cfg['cycles']<1 or cfg['group_size']<2 or cfg['max_rounds']<1:raise ValueError('Invalid self-play/group/round counts.')
+    if cfg.get('single_crop_only',False) and (cfg['max_rounds']!=1 or cfg.get('probe_crops_per_group',0)!=0):
+        raise ValueError('single_crop_only requires max_rounds=1 and probe_crops_per_group=0.')
     if type(cfg['groups_per_phase']) is not int or cfg['groups_per_phase']<0:raise ValueError('groups_per_phase must be 0 (full data) or a positive local limit.')
     if cfg['temperature']<=0 or cfg['max_new_tokens']<1 or cfg['max_context']<2:raise ValueError('Invalid sampling limits.')
     if cfg['backend'] not in ('native','deepspeed'):raise ValueError('Unsupported training backend.')
     if cfg['answer_mode'] not in ('exact','semantic'):raise ValueError('Unsupported answer verifier.')
+    if cfg.get('crop_coordinate_mode','normalized') not in ('normalized','pixel'):raise ValueError('Unsupported crop coordinate mode.')
     if not 0<=cfg['min_label_confidence']<=1:raise ValueError('Invalid pseudo-label threshold.')
     if cfg['max_rounds']*(cfg['area_cost']+cfg['observation_cost'])+cfg['evidence_bonus']>=1:raise ValueError('Secondary costs must not dominate task accuracy.')
     for key in ['area_cost','observation_cost','evidence_bonus','quality_cost','confidence_cost']:
@@ -51,9 +54,11 @@ class JudgeServer:
                  '--tensor-parallel-size',str(len(self.cfg['judge_devices'])),
                  '--max-model-len',str(self.cfg['judge_context']), '--gpu-memory-utilization',str(self.cfg.get('judge_gpu_memory_utilization',.85)),
                  '--max-num-seqs',str(self.cfg.get('judge_max_num_seqs',1)),
-                 '--default-chat-template-kwargs',json.dumps({'enable_thinking':False}),
                  '--dtype','bfloat16','--limit-mm-per-prompt',json.dumps({'image':self.cfg['max_rounds'],'video':0}),
                  '--mm-processor-kwargs',json.dumps({'max_pixels':self.cfg['max_pixels']})]
+        architecture=json.loads((self.model/'config.json').read_text()).get('model_type')
+        if architecture in {'qwen3_5','qwen3_5_moe'}:
+            command+=['--default-chat-template-kwargs',json.dumps({'enable_thinking':False})]
         if self.cfg.get('judge_enforce_eager',True):command.append('--enforce-eager')
         env=os.environ.copy();env['CUDA_VISIBLE_DEVICES']=device_list(self.cfg['judge_devices'])
         self.process=subprocess.Popen(command,env=env,stdout=self.handle,stderr=subprocess.STDOUT,start_new_session=True)

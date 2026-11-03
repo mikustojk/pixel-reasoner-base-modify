@@ -10,14 +10,14 @@ class JudgeResponseError(ValueError):
         self.response_kind=kind;self.raw_response=raw_response;self.finish_reason=finish_reason
 
 class FrozenJudge:
-    def __init__(self,url,model,version,timeout=120,retries=2,client=None):
+    def __init__(self,url,model,version,timeout=120,retries=2,client=None,single_crop=False):
         if client is None:
             from openai import OpenAI
             client=OpenAI(base_url=url,api_key='EMPTY',timeout=timeout,max_retries=retries)
-        self.client=client;self.model=model;self.version=version
+        self.client=client;self.model=model;self.version=version;self.single_crop=single_crop
 
     def judge(self,question,options,evidence):
-        messages=verification_messages(question,options,evidence)
+        messages=verification_messages(question,options,evidence,self.single_crop)
         content=[]
         for p in messages[1]['content']:
             if p['type']=='text':content.append(p)
@@ -27,7 +27,7 @@ class FrozenJudge:
         request=[messages[0],{'role':'user','content':content}]
         result=self.client.chat.completions.create(model=self.model,messages=request,temperature=0.,max_tokens=1024)
         raw=result.choices[0].message.content or ''
-        try:return parse_decision(raw),raw
+        try:return parse_decision(raw,self.single_crop),raw
         except (ValueError,TypeError) as error:
             raise JudgeResponseError('evidence',str(error),raw,
                                      getattr(result.choices[0],'finish_reason',None)) from error

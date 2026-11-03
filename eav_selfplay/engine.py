@@ -69,7 +69,8 @@ class Engine:
                     'train_batch_size':microsteps*self.world,'bf16':{'enabled':True},
                     'zero_optimization':{'stage':2,'offload_optimizer':{'device':'cpu'} if cfg['optimizer_offload'] else {'device':'none'}},
                     'gradient_clipping':cfg['grad_clip'],
-                    'optimizer':{'type':'AdamW','params':{'lr':cfg['learning_rate'],'weight_decay':cfg['weight_decay']}},
+                    'optimizer':{'type':'AdamW','params':{'lr':cfg['learning_rate'],'weight_decay':cfg['weight_decay'],
+                                                        'torch_adam':not cfg['optimizer_offload']}},
                     'steps_per_print':1000000}
             self.model,self.optimizer,_,_=deepspeed.initialize(model=self.bare,model_parameters=parameters,config=config)
         else:
@@ -176,12 +177,13 @@ class Engine:
         path=Path(path);path.mkdir(parents=True,exist_ok=True)
         if self.ds:
             self.model.save_checkpoint(str(path/'optimizer'),tag='final')
-            self.model.save_16bit_model(str(path/'hf'))
             if self.rank==0:
-                self.bare.config.save_pretrained(path/'hf')
-                self.bare.generation_config.save_pretrained(path/'hf')
+                # ZeRO-2 keeps model parameters replicated.  Hugging Face's
+                # sharded safetensors avoid repeatedly scanning a huge .bin
+                # when the next phase loads the model on every rank.
+                self.bare.save_pretrained(path/'hf',safe_serialization=True,max_shard_size='4GB')
         elif self.rank==0:
-            self.bare.save_pretrained(path/'hf',safe_serialization=True)
+            self.bare.save_pretrained(path/'hf',safe_serialization=True,max_shard_size='4GB')
             torch.save(self.optimizer.state_dict(),path/'optimizer.pt')
         if self.rank==0:self.processor.save_pretrained(path/'hf')
         if self.world>1:dist.barrier()

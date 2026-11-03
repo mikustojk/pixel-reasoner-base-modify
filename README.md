@@ -1,5 +1,7 @@
 # Evidence Acquisition–Verification Self-Play
 
+> s92（8×H200）的本机路径、环境和运行入口见 [README.s92.md](README.s92.md)。下文保留原八卡集群的历史配置与联调记录。
+
 本分支以 Pixel-Reasoner 为基础，实现证据获取 P1／证据验证 P2 的交替 GRPO。P1/P2 是同一个 Qwen2.5-VL-7B-Instruct、同一套可训练权重，通过角色提示和独立上下文切换。原项目说明见 [README.upstream.md](README.upstream.md)。
 
 ## 当前资源与模型

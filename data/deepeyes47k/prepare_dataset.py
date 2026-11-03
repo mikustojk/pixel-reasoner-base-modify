@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -21,8 +22,9 @@ import pyarrow.parquet as pq
 
 ROOT = Path('/inspire/hdd/global_user/lichengqi-253108120152')
 HERE = Path(__file__).resolve().parent
-SOURCE = ROOT / 'DeepEyes/data/benchmarks/DeepEyes-Datasets-47k'
-BENCH = ROOT / 'DeepEyes/data/benchmarks'
+SOURCE = Path(os.environ.get('EAV_DATA_SOURCE', ROOT / 'DeepEyes/data/benchmarks/DeepEyes-Datasets-47k'))
+VSTAR = Path(os.environ.get('EAV_VSTAR_ROOT', ROOT / 'DeepEyes/data/benchmarks/vstar_bench'))
+HRBENCH = Path(os.environ.get('EAV_HRBENCH_ROOT', ROOT / 'DeepEyes/data/benchmarks/hrbench'))
 OUT = HERE / 'prepared_v1'
 OPTION_PATTERNS = (
     re.compile(r'(?<![A-Za-z0-9])([A-F])[.．、]\s*'),
@@ -90,7 +92,7 @@ def build_eval_index():
     encoded_cache = {}
     files = {}
     for split in ['direct_attributes', 'relative_position']:
-        paths = sorted((BENCH / 'vstar_bench' / split).glob('*.jpg'))
+        paths = sorted((VSTAR / split).glob('*.jpg'))
         for path in paths:
             with Image.open(path) as src:
                 rgb = src.convert('RGB')
@@ -100,7 +102,7 @@ def build_eval_index():
         log(f'Evaluation index: V* {split}, {len(paths)} images')
     csv.field_size_limit(100_000_000)
     for split in ['4k', '8k']:
-        path = BENCH / 'hrbench' / f'hr_bench_{split}.tsv'
+        path = HRBENCH / f'hr_bench_{split}.tsv'
         count = 0
         with path.open() as stream:
             for row in csv.DictReader(stream, delimiter='\t'):
@@ -141,9 +143,12 @@ def extract(args):
 
 def main():
     if OUT.exists():
-        raise ValueError(f'Output already exists; preserve it and select a new version: {OUT}')
-    OUT.mkdir(parents=True)
-    (OUT / 'images').mkdir()
+        if os.environ.get('EAV_RESUME_PREP') != '1' or not (OUT / 'images').is_dir():
+            raise ValueError(f'Output already exists; preserve it and select a new version: {OUT}')
+        log(f'Reusing atomically written images in {OUT}; rebuilding all manifests and rows')
+    else:
+        OUT.mkdir(parents=True)
+        (OUT / 'images').mkdir()
     sources = {}
     for path in sorted(SOURCE.glob('*.parquet')):
         sources[path.name] = {'path': str(path), 'bytes': path.stat().st_size,

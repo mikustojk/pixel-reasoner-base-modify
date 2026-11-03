@@ -7,13 +7,13 @@ def write_json(path,value):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
     fd,tmp=tempfile.mkstemp(dir=path.parent,suffix='.tmp')
     try:
-        with os.fdopen(fd,'w') as f:json.dump(value,f,ensure_ascii=False,indent=2,allow_nan=False);f.write('\n')
+        with os.fdopen(fd,'w',encoding='utf-8') as f:json.dump(value,f,ensure_ascii=False,indent=2,allow_nan=False);f.write('\n')
         os.replace(tmp,path)
     finally:Path(tmp).unlink(missing_ok=True)
 
 
 def rows(path):
-    with Path(path).open() as f:
+    with Path(path).open(encoding='utf-8') as f:
         for line in f:
             if line.strip():yield json.loads(line)
 

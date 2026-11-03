@@ -17,6 +17,57 @@ def decision(label,answer='',quality=.8,confidence=.9):
  return '<decision>'+json.dumps({'action':'answer' if label=='sufficient' else 'request_more','evidence_label':label,'quality':quality,'confidence':confidence,'answer':answer})+'</decision>'
 
 class ProtocolTests(unittest.TestCase):
+ def test_single_crop_protocol_has_one_acquisition_and_final_abstention(self):
+  abstain='<decision>{"action":"abstain","evidence_label":"insufficient","quality":0.2,"confidence":0.9,"answer":""}</decision>'
+  self.assertEqual(parse_decision(abstain,True).action,'abstain')
+  with self.assertRaises(ValueError):parse_decision(decision('insufficient'),True)
+  self.assertNotIn('request_more',P2_SYSTEM_SINGLE)
+  c=dict(CFG,group_size=2,max_rounds=1,probe_crops_per_group=0,single_crop_only=True)
+  class Actor:
+   def __init__(self):self.crops=[];self.verifications=[]
+   def sample(self,messages,*args):
+    self.crops.append(messages)
+    return SimpleNamespace(text='<crop>{"bbox":[0,0,1,1]}</crop>',active=True)
+   def infer(self,messages,*args):
+    self.verifications.append(messages)
+    return abstain
+  class Judge:
+   def __init__(self):self.calls=0
+   def judge(self,*args):
+    self.calls+=1
+    self.assert_one_image(args[2])
+    return parse_decision(abstain,True),abstain
+   def assert_one_image(self,evidence):
+    if len(evidence.images)!=1:raise AssertionError('One crop must reach the judge.')
+   def answer_correct(self,*args):raise AssertionError('Abstention is final and has no answer to score.')
+  with tempfile.TemporaryDirectory() as temp:
+   p=Path(temp);image=p/'original.png';Image.new('RGB',(56,56),'red').save(image)
+   q=Question('q','Where are the red details?',str(image),'red',{})
+   requests=[]
+   def create(**kwargs):
+    requests.append(kwargs)
+    return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=abstain),finish_reason='stop')])
+   client=SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+   frozen=FrozenJudge('unused','model','v',client=client,single_crop=True)
+   self.assertEqual(frozen.judge(q.question,{},Evidence((str(image),)))[0].action,'abstain')
+   self.assertEqual(requests[0]['messages'][0]['content'],P2_SYSTEM_SINGLE)
+   actor=Actor();judge=Judge()
+   groups,rewards,eligible,bank,traces=acquisition_group(actor,q,judge,c,p/'crops','v','g')
+   self.assertEqual([len(group) for group in groups],[1,1]);self.assertEqual(len(actor.crops),2)
+   self.assertEqual(judge.calls,2);self.assertEqual(len(bank),2)
+   self.assertEqual(format_diagnostics(traces)['valid_crops'],2)
+   self.assertTrue(all('SINGLE-CROP TASK' in call[0]['content'] for call in actor.crops))
+   online=Actor()
+   result=acquisition_group(online,q,Judge(),c,p/'online','v','g',online_p2=True)
+   self.assertEqual(len(online.crops),2);self.assertEqual(len(online.verifications),2)
+   self.assertEqual(len(result[3]),2)
+   self.assertTrue(all(call[0]['content']==P2_SYSTEM_SINGLE for call in online.verifications))
+   with self.assertRaises(ValueError):verification_messages('Q',{},Evidence((str(image),str(image))),True)
+   class P2Actor:
+    def sample(self,*args):return SimpleNamespace(text=abstain,active=True)
+   _,p2_rewards,_,_,_=verification_group(P2Actor(),bank[0],judge,c)
+   self.assertTrue(all(reward>0 for reward in p2_rewards))
+
  def test_prompt_examples_are_valid_and_observed_invalid_outputs_remain_invalid(self):
   import re
   examples=re.findall(r'<crop>(\{[^\n]*?\})</crop>',P1_SYSTEM)
@@ -107,6 +158,14 @@ class ProtocolTests(unittest.TestCase):
    with Image.open(path) as crop:self.assertEqual(crop.size,(50,60));self.assertEqual(crop.tobytes(),im.crop((10,20,60,80)).tobytes())
    self.assertAlmostEqual(area,.3)
    with self.assertRaises(ValueError):crop_pixels(p/'original.png',(0,0,.01,.01),p/'crops')
+   pixel='<crop>{"bbox":[10,20,60,80]}</crop>'
+   self.assertEqual(parse_crop_for_image(pixel,p/'original.png','pixel'),(.1,.2,.6,.8))
+   self.assertEqual(parse_crop_for_image('<crop bbox="[10,20,60,80]"></crop>',p/'original.png','pixel'),(.1,.2,.6,.8))
+   with self.assertRaises(ValueError):parse_crop_for_image('<crop bbox="[10,20,60,80]" label="secret"></crop>',p/'original.png','pixel')
+   self.assertEqual(parse_crop_for_image('<crop>{"bbox":[0,20,104,80]}</crop>',p/'original.png','pixel'),(0.,.2,1.,.8))
+   with self.assertRaises(ValueError):parse_crop_for_image('<crop>{"bbox":[0,20,110,80]}</crop>',p/'original.png','pixel')
+   prompt=acquisition_messages('Q',p/'original.png',{},[],Feedback(True),'pixel')
+   self.assertIn('width=100',json.dumps(prompt))
   d=parse_decision(decision('sufficient','red'))
   self.assertEqual(p1_reward(False,d,0.01,1,CFG),p1_reward(False,d,1.,3,CFG))
   self.assertGreater(p1_reward(True,d,1.,3,CFG),p1_reward(False,d,0.,0,CFG))
@@ -379,7 +438,7 @@ class PipelineTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as temp:
    p=Path(temp);image=p/'original.png';Image.new('RGB',(56,56),'red').save(image)
    argv=['infer_selfplay','--url','http://shared/v1','--model','shared_test',
-         '--image',str(image),'--question','Q','--output',str(p/'out')]
+         '--image',str(image),'--question','Q','--max-rounds','3','--output',str(p/'out')]
    with patch.object(inference,'OpenAI',return_value=client) as factory,patch.object(sys,'argv',argv):inference.main()
    factory.assert_called_once();self.assertEqual(len(requests),4)
    self.assertEqual({r['model'] for r in requests},{'shared_test'})
@@ -395,6 +454,26 @@ class PipelineTests(unittest.TestCase):
    result=json.loads((p/'out/result.json').read_text())
    self.assertEqual(result['status'],'answered');self.assertEqual(result['model'],'shared_test')
    self.assertEqual(result['policy_architecture'],'shared_policy_roles_v1')
+
+ def test_inference_defaults_to_one_crop_and_final_abstention(self):
+  import infer_selfplay as inference
+  responses=['<crop>{"bbox":[0,0,1,1]}</crop>',
+             '<decision>{"action":"abstain","evidence_label":"insufficient","quality":0.2,"confidence":0.9,"answer":""}</decision>']
+  requests=[]
+  def create(**kwargs):
+   requests.append(kwargs)
+   return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=responses.pop(0)))])
+  client=SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+  with tempfile.TemporaryDirectory() as temp:
+   p=Path(temp);image=p/'original.png';Image.new('RGB',(56,56),'red').save(image)
+   argv=['infer_selfplay','--url','http://shared/v1','--model','shared_test',
+         '--image',str(image),'--question','Q','--output',str(p/'out')]
+   with patch.object(inference,'OpenAI',return_value=client),patch.object(sys,'argv',argv):inference.main()
+   self.assertEqual(len(requests),2)
+   self.assertEqual(requests[1]['messages'][0]['content'],P2_SYSTEM_SINGLE)
+   result=json.loads((p/'out/result.json').read_text())
+   self.assertEqual(result['status'],'insufficient_evidence')
+   self.assertTrue(result['single_crop_only'])
 
 class TinyTrainingTests(unittest.TestCase):
  @unittest.skipUnless(os.environ.get('EAV_TEST_PROCESSOR'),'Set EAV_TEST_PROCESSOR to a local Qwen2.5-VL processor for real optimizer tests.')
