@@ -31,3 +31,37 @@ bash scripts/run_selfplay_s92.sh --phase train --train-config configs/selfplay_s
 ```
 
 筛选后的 s92 训练配置启用单次裁剪：每个候选只选一个包含全部证据的矩形，P2 一次性回答或放弃，不再请求补充证据；随机探针裁剪也关闭。本过滤命令不会自动启动训练。
+
+
+## 已提交到本分支的正确样本记录
+
+`data/deepeyes47k/quality_27b_v1/` 中以下文件已纳入 Git：
+
+| 文件 | 内容 |
+| --- | --- |
+| `train_verified.jsonl` | 25,073 条训练记录：`qid`、`question`、`image`、`reference`、`options`。 |
+| `correct.jsonl` | 同一批记录，额外包含 `quality_audit`：原始索引、逐条哈希、标签、理由、首次判定和确认判定等。 |
+| `correct_qids.txt` | 每行一个正确样本的 `qid`，顺序与训练清单一致。 |
+| `summary.json` | 完成标记、分类数量、训练清单 SHA-256。 |
+| `manifest.json` | 输入哈希、裁判模型、提示词版本、随机种子和置信度门槛。 |
+| `records_manifest.json` | 上述文件的 SHA-256、文件大小和记录数量。 |
+
+本次审计处理 44,673 条输入，分为正确 25,073 条、GT 有问题 2,140 条、不可答 2,247 条、待复核 15,213 条。`train_verified.jsonl` 和 `correct.jsonl` 按 `qid` 一一对应。训练清单 SHA-256 为 `2f5184573f19ae0584627e3a84078dd346d42d78895e50820ae002eb5c702f75`。
+
+图片以及其他分类的逐条记录保存在 s92，未纳入本次提交。JSONL 的 `image` 字段指向 s92 上的绝对路径；克隆分支后在其他机器训练，需要先准备对应图片并映射路径。
+
+在仓库根目录校验文件完整性：
+
+```bash
+python3 - <<'PYVERIFY'
+import hashlib, json
+from pathlib import Path
+base = Path('data/deepeyes47k/quality_27b_v1')
+manifest = json.loads((base / 'records_manifest.json').read_text())
+for name, info in manifest['files'].items():
+    path = base / name
+    assert path.stat().st_size == info['bytes'], name
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == info['sha256'], name
+print('OK:', manifest['records'], 'correct samples')
+PYVERIFY
+```

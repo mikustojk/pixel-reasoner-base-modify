@@ -1,0 +1,12 @@
+{
+  "input": "/mnt/source/chengqili/pixel-reasoner-base-modify/data/deepeyes47k/prepared_v2/train.jsonl",
+  "input_sha256": "5da7952e7414d939535d61bb39d96766d566d46d28061e0c4c27f3ef100eaa1b",
+  "selected_count": 44673,
+  "sample": 0,
+  "seed": 20261102,
+  "model_path": "/mnt/source/models/Qwen/Qwen3.8-27B",
+  "prompt_version": "image_gt_triage_v3",
+  "prompt_sha256": "24e63ccbebcc5d665abe3a4532596b4caf5f7f037d660274c5bfdd92221ad664",
+  "correct_min_confidence": 0.85,
+  "problem_min_confidence": 0.9
+}

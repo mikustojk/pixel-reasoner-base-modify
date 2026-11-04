@@ -1,0 +1,32 @@
+{
+  "description": "Correct sample records selected by the completed s92 27B audit; images are not included.",
+  "records": 25073,
+  "input_sha256": "5da7952e7414d939535d61bb39d96766d566d46d28061e0c4c27f3ef100eaa1b",
+  "model_path": "/mnt/source/models/Qwen/Qwen3.8-27B",
+  "prompt_version": "image_gt_triage_v3",
+  "files": {
+    "train_verified.jsonl": {
+      "sha256": "2f5184573f19ae0584627e3a84078dd346d42d78895e50820ae002eb5c702f75",
+      "bytes": 11903643,
+      "records": 25073
+    },
+    "correct.jsonl": {
+      "sha256": "5c0a11397e8d2fd6cc6533480e361dd40e90d76d2c7a6f0cea3768c8c85035c3",
+      "bytes": 50846396,
+      "records": 25073
+    },
+    "correct_qids.txt": {
+      "sha256": "4fa2d9efb4047bbc0f81514a3489e5bd28f4e9419d890c841bb267e3a2ee599d",
+      "bytes": 1629745,
+      "records": 25073
+    },
+    "summary.json": {
+      "sha256": "a677f574dbabf77754921bd841e9faf8b14cfb777c9955adc0942d0758180353",
+      "bytes": 782
+    },
+    "manifest.json": {
+      "sha256": "6232792b9e742f426b9579f753c5ddd536247bfa5f7f244f4fe2a08fedbf9785",
+      "bytes": 506
+    }
+  }
+}

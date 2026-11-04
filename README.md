@@ -4,6 +4,12 @@
 
 本分支以 Pixel-Reasoner 为基础，实现证据获取 P1／证据验证 P2 的交替 GRPO。P1/P2 是同一个 Qwen2.5-VL-7B-Instruct、同一套可训练权重，通过角色提示和独立上下文切换。原项目说明见 [README.upstream.md](README.upstream.md)。
 
+## 已提交的 27B 筛选数据记录
+
+本分支包含 27B 筛选后 **25,073 条正确样本**的 [训练清单](data/deepeyes47k/quality_27b_v1/train_verified.jsonl)、[逐条审计记录](data/deepeyes47k/quality_27b_v1/correct.jsonl) 和 [正确样本 qid 清单](data/deepeyes47k/quality_27b_v1/correct_qids.txt)。判定标准为两次独立判定一致且置信度均至少 0.85；“正确”是模型审计结果。
+
+[筛选摘要](data/deepeyes47k/quality_27b_v1/summary.json) 记录全部 44,673 条输入的分类数量，[文件清单](data/deepeyes47k/quality_27b_v1/records_manifest.json) 提供 SHA-256 和大小。图片保存在 s92，JSONL 中的 `image` 为该机器的绝对路径；在其他机器使用时需要准备图片并映射路径。筛选流程、字段和校验命令见 [README.filter.s92.md](README.filter.s92.md)。
+
 ## 当前资源与模型
 
 | 设备 | 用途 |
