@@ -10,8 +10,7 @@
     3,
     4,
     5,
-    6,
-    7
+    6
   ],
   "judge_devices": [
     0
@@ -53,5 +52,6 @@
   "require_both_labels": true,
   "probe_crops_per_group": 0,
   "crop_coordinate_mode": "pixel",
-  "single_crop_only": true
+  "single_crop_only": true,
+  "all_wrong_area_bonus": 0.1
 }

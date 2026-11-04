@@ -32,8 +32,10 @@ def validate(cfg):
     if cfg.get('crop_coordinate_mode','normalized') not in ('normalized','pixel'):raise ValueError('Unsupported crop coordinate mode.')
     if not 0<=cfg['min_label_confidence']<=1:raise ValueError('Invalid pseudo-label threshold.')
     if cfg['max_rounds']*(cfg['area_cost']+cfg['observation_cost'])+cfg['evidence_bonus']>=1:raise ValueError('Secondary costs must not dominate task accuracy.')
-    for key in ['area_cost','observation_cost','evidence_bonus','quality_cost','confidence_cost']:
+    for key in ['area_cost','all_wrong_area_bonus','observation_cost','evidence_bonus','quality_cost','confidence_cost']:
         if cfg[key]<0:raise ValueError('Negative reward weight '+key)
+    if cfg['all_wrong_area_bonus']>=1-cfg['max_rounds']*(cfg['area_cost']+cfg['observation_cost']):
+        raise ValueError('All-wrong area bonus must stay below a correct answer reward.')
     return load_questions(cfg['train_data'])
 
 def device_list(indices):

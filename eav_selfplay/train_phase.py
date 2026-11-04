@@ -43,7 +43,7 @@ def acquisition_group(engine,q,judge,cfg,crop_dir,version,group_id,online_p2=Fal
     single_crop=cfg.get('single_crop_only',False)
     if single_crop and (cfg['max_rounds']!=1 or cfg.get('probe_crops_per_group',0)!=0):
         raise ValueError('Single-crop training requires one round and no probe crops.')
-    groups=[];rewards=[];eligible=[];bank=[];traces=[]
+    groups=[];rewards=[];eligible=[];bank=[];traces=[];candidates=[]
     evidence_source='current_shared_p2' if online_p2 else 'bootstrap_judge'
 
     def observation(images):
@@ -102,9 +102,19 @@ def acquisition_group(engine,q,judge,cfg,crop_dir,version,group_id,online_p2=Fal
                 traces.append(response_error(error_event,error,raw,candidate=sample_index,
                                              turn=turn,judge_error=str(error)))
         groups.append(samples);eligible.append(ok)
-        rewards.append(p1_reward(correct,decision,area,len(evidence),cfg,invalid))
-        traces.append({'candidate':sample_index,'p1_private_outputs':own,'total_area_fraction':area,
-                       'correct':correct,'reward':rewards[-1],'eligible':ok})
+        summary={'candidate':sample_index,'p1_private_outputs':own,'total_area_fraction':area,
+                 'correct':correct,'eligible':ok}
+        traces.append(summary)
+        candidates.append((decision,area,len(evidence),invalid,summary))
+    all_correct=all(summary['correct'] for _,_,_,_,summary in candidates)
+    all_wrong=all(not summary['correct'] and summary['eligible'] for _,_,_,_,summary in candidates)
+    for decision,area,calls,invalid,summary in candidates:
+        reward=p1_reward(summary['correct'],decision,area,calls,cfg,invalid,
+                         all_correct=all_correct,all_wrong=all_wrong)
+        rewards.append(reward)
+        summary['reward']=reward
+        summary['group_all_correct']=all_correct
+        summary['group_all_wrong']=all_wrong
     # Extra crops are judged by the same evidence evaluator as active episodes.
     # A random crop is NEVER automatically called irrelevant.
     from PIL import Image

@@ -239,14 +239,18 @@ def crop_pixels(original, box, output_dir, min_side=28):
     return str(path), area
 
 
-def p1_reward(correct, decision, total_area, calls, cfg, invalid=False):
+def p1_reward(correct, decision, total_area, calls, cfg, invalid=False, all_correct=False, all_wrong=False):
     if invalid:
         return -float(cfg['invalid_penalty'])
-    # Accuracy dominates; shrinking an incorrect crop never earns a bonus.
     utility = float(bool(correct))
-    if decision is not None and decision.evidence_label == 'sufficient':
+    if correct and decision is not None and decision.evidence_label == 'sufficient':
         utility += cfg['evidence_bonus']*decision.quality
-    return utility - float(bool(correct))*(cfg['area_cost']*total_area + cfg['observation_cost']*calls)
+    reward = utility - float(bool(correct))*cfg['observation_cost']*calls
+    if all_correct and correct:
+        reward -= cfg['area_cost']*total_area
+    elif all_wrong and not correct:
+        reward += cfg.get('all_wrong_area_bonus',0.0)*total_area
+    return reward
 
 
 def p2_reward(decision, label, target_quality, target_confidence, correct, cfg, single_crop=False):

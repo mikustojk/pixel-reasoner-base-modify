@@ -25,9 +25,9 @@ def main():
     import transformers
     if not torch.cuda.is_available():raise RuntimeError('CUDA is unavailable in the training environment.')
     devices=cfg['train_devices']+cfg['judge_devices']
-    if max(devices)>=torch.cuda.device_count():raise RuntimeError('The allocation does not expose the eight configured GPUs.')
-    if len(cfg['train_devices'])!=7 or len(cfg['judge_devices'])!=1:
-        raise ValueError('This cluster entry expects seven training GPUs and one judge GPU.')
+    if max(devices)>=torch.cuda.device_count():raise RuntimeError('The allocation does not expose all configured GPUs.')
+    if len(cfg['train_devices'])!=6 or len(cfg['judge_devices'])!=1:
+        raise ValueError('This s92 entry expects six training GPUs and one judge GPU.')
     train_path=Path(cfg['train_data'])
     train_sha256=digest(train_path)
     metadata_path=train_path.parent/'manifest.json'

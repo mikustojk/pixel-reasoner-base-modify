@@ -2,7 +2,7 @@
 
 训练集 27B 质量审计的类别、阈值和续跑方式见 [README.filter.s92.md](README.filter.s92.md)。
 
-本机训练模型为 `/mnt/source/models/Qwen/Qwen2.5-VL-7B-Instruct`，固定多模态裁判为 `/mnt/source/models/Qwen/Qwen3.8-27B`。GPU 0 运行裁判，GPU 1～7 训练共享的 7B 策略。27B 的配置架构为 `qwen3_5`，带原生视觉编码器。它与旧集群的 Qwen3.6-27B 权重不同；证据标签的质量仍需通过 smoke 运行和人工审计确认。
+本机训练模型为 `/mnt/source/models/Qwen/Qwen2.5-VL-7B-Instruct`，固定多模态裁判为 `/mnt/source/models/Qwen/Qwen3.8-27B`。下一次实验使用 GPU 0 运行裁判，GPU 1～6 训练共享的 7B 策略；GPU 7 预留给其他实验。27B 的配置架构为 `qwen3_5`，带原生视觉编码器。它与旧集群的 Qwen3.6-27B 权重不同；证据标签的质量仍需通过 smoke 运行和人工审计确认。
 
 ## 环境
 
@@ -35,9 +35,9 @@ export EAV_HRBENCH_ROOT=/mnt/source/chengqili/Efficient-tool-call/data/HR-Bench
 
 ## 预检与训练
 
-本机配置分别是 `configs/selfplay_s92.json`（原始训练集全量）、`configs/selfplay_s92_filtered.json`（27B 筛选后的 25,073 条全量）和 `configs/selfplay_s92_smoke.json`（筛选集、每卡每阶段 2 个问题组）。入口默认只运行两轮 smoke。预检验证数据、模型、训练依赖、CUDA 和裁判环境；日志与输出留在 `outputs/cluster/<UTC时间>-<PID>/`。
+本分支的启动脚本默认使用筛选训练集。配置分别是 `configs/selfplay_s92.json`（原始训练集全量）、`configs/selfplay_s92_filtered.json`（27B 筛选后的 25,073 条全量）和 `configs/selfplay_s92_smoke.json`（筛选集、每卡每阶段 2 个问题组）。入口默认只运行两轮 smoke。预检验证数据、模型、训练依赖、CUDA 和裁判环境；日志与输出留在 `outputs/cluster/<UTC时间>-<PID>/`。
 
-当前 s92 配置启用 `single_crop_only=true`：`max_rounds=1`、`probe_crops_per_group=0`。每个 P1 候选只生成一次裁剪，提示词要求一个矩形包含回答所需的全部对象、图表标注和其他证据；证据分散时允许框住整图。P2 对这张裁剪只做一次最终判断：证据充分则回答，否则 `abstain`，不再要求更多证据。P2 的 `confidence` 表示对这一判断的把握，不等同于证据充分程度。证据入池门槛维持 0.8；P2 阶段仍要求充分和不足两类都存在，否则拒绝训练。推理入口的默认裁剪预算也为 1。旧运行目录里的多轮轨迹不能续接到新协议。
+下一次实验中，P1 的证据充分加分仅在答案正确时发放。同一题的 4 个采样全部答对时才计算面积惩罚；4 个都答错且裁判调用成功时，有效裁剪按原图面积占比乘以 `all_wrong_area_bonus=0.1` 加分，面积越大加分越多；部分答对时不计面积项。无效裁剪仍按 `invalid_penalty` 扣分。当前 s92 配置启用 `single_crop_only=true`：`max_rounds=1`、`probe_crops_per_group=0`。每个 P1 候选只生成一次裁剪，提示词要求一个矩形包含回答所需的全部对象、图表标注和其他证据；证据分散时允许框住整图。P2 对这张裁剪只做一次最终判断：证据充分则回答，否则 `abstain`，不再要求更多证据。P2 的 `confidence` 表示对这一判断的把握，不等同于证据充分程度。证据入池门槛维持 0.8；P2 阶段仍要求充分和不足两类都存在，否则拒绝训练。推理入口的默认裁剪预算也为 1。旧运行目录里的多轮轨迹不能续接到新协议。
 
 ```bash
 cd /mnt/source/chengqili/pixel-reasoner-base-modify
@@ -47,13 +47,13 @@ bash scripts/run_selfplay_s92.sh --phase smoke
 bash scripts/run_selfplay_s92.sh --phase train --train-config configs/selfplay_s92_filtered.json
 ```
 
-`--phase all` 会先跑 smoke，成功后直接从原始 7B 基座启动全量训练。`--train-python` 可覆盖训练环境路径。入口尊重继承的 `CUDA_VISIBLE_DEVICES`；若调度器只分配部分 GPU，配置中的 0～7 必须在该分配内。
+`--phase all` 会先跑 smoke，成功后直接从原始 7B 基座启动全量训练。`--train-python` 可覆盖训练环境路径。入口尊重继承的 `CUDA_VISIBLE_DEVICES`；若调度器只分配部分 GPU，配置中的 GPU 0～6 必须在该分配内，GPU 7 不会被此入口占用。
 
 ZeRO-2 的优化器检查点照常保存；供下一阶段加载的模型权重保存为 4GB 分片的 `safetensors`。单个约 16GB 的 `pytorch_model.bin` 在本机多进程加载时会被反复读取，耗时异常。旧运行产生的 `.bin` 不建议直接用于 s92 的后续阶段。
 
 ## 本机验证
 
-2026-11-03 的单次裁剪两轮 GPU smoke 位于 `outputs/cluster/20261103T031629Z-69867/smoke`，四个阶段的 7 个 rank 各完成 2 次更新，`complete.json` 记录了真实训练。两个 P1 阶段的证据池分别有 46 条和 42 条记录，每条恰好一张裁剪图；第 2 轮的 30 条充分、12 条不足标签都达到 0.8 的入池门槛。有效 P2 判断中的不足证据使用 `abstain`，没有 `request_more`。
+2026-11-03 的单次裁剪两轮 GPU smoke 位于 `outputs/cluster/20261103T031629Z-69867/smoke`，四个阶段的 7 个 rank 各完成 2 次更新（旧配置），`complete.json` 记录了真实训练。两个 P1 阶段的证据池分别有 46 条和 42 条记录，每条恰好一张裁剪图；第 2 轮的 30 条充分、12 条不足标签都达到 0.8 的入池门槛。有效 P2 判断中的不足证据使用 `abstain`，没有 `request_more`。
 
 2026-11-02 的两轮 GPU smoke 位于 `outputs/cluster/20261102T052025Z-19989/smoke`，`complete.json` 记录了 `real_training_performed=true`。这次 smoke 使用旧的多轮裁剪提示和配置，仅验证基础环境与模型链。四个训练阶段（每轮 P1、P2）都完成了每卡 2 次优化器更新，最终模型位于 `cycle_002/process2/hf`。两轮之间实际使用了训练后的共享 P2；裁判始终为本机 Qwen3.8-27B。P2 加载分片权重约一分钟内进入训练；此前单文件 `.bin` 在 7 个进程中反复读取，无法在合理时间内完成载入。
 

@@ -167,12 +167,49 @@ class ProtocolTests(unittest.TestCase):
    prompt=acquisition_messages('Q',p/'original.png',{},[],Feedback(True),'pixel')
    self.assertIn('width=100',json.dumps(prompt))
   d=parse_decision(decision('sufficient','red'))
-  self.assertEqual(p1_reward(False,d,0.01,1,CFG),p1_reward(False,d,1.,3,CFG))
+  self.assertEqual(p1_reward(False,d,0.01,1,CFG),0.)
+  self.assertEqual(p1_reward(False,d,1.,3,CFG),0.) # sufficient but wrong gets no evidence bonus
+  self.assertAlmostEqual(p1_reward(False,d,1.,1,CFG,all_wrong=True),CFG['all_wrong_area_bonus'])
+  self.assertEqual(p1_reward(False,d,1.,1,CFG,invalid=True,all_wrong=True),-CFG['invalid_penalty'])
   self.assertGreater(p1_reward(True,d,1.,3,CFG),p1_reward(False,d,0.,0,CFG))
   self.assertLess(p2_reward(d,'insufficient',.1,.9,True,CFG),0) # lucky right still wrong action
   request=parse_decision(decision('insufficient'))
   self.assertGreater(p2_reward(request,'insufficient',.1,.9,False,CFG),0)
   with self.assertRaises(ValueError):p2_reward(request,'uncertain',.5,.5,False,CFG)
+ def test_area_penalty_only_when_whole_group_correct(self):
+  c=dict(CFG,group_size=2,max_rounds=1,probe_crops_per_group=0,single_crop_only=True)
+  class Actor:
+   def __init__(self):self.index=0
+   def sample(self,*args):
+    boxes=['[0,0,1,1]','[0,0,0.5,1]']
+    box=boxes[self.index];self.index+=1
+    return SimpleNamespace(text='<crop>{"bbox":'+box+'}</crop>',active=True)
+  class Judge:
+   def __init__(self,correct):self.correct=iter(correct)
+   def judge(self,*args):
+    raw=decision('sufficient','red')
+    return parse_decision(raw,True),raw
+   def answer_correct(self,*args):return next(self.correct)
+  with tempfile.TemporaryDirectory() as temp:
+   p=Path(temp);image=p/'original.png';Image.new('RGB',(100,100),'red').save(image)
+   q=Question('q','What color?',str(image),'red',{})
+   def run(correct):
+    _,rewards,_,_,traces=acquisition_group(Actor(),q,Judge(correct),c,p/'crops','v','g')
+    summaries=[r for r in traces if 'group_all_correct' in r]
+    return rewards,summaries
+   mixed,mixed_traces=run([True,False])
+   all_right,all_traces=run([True,True])
+   all_wrong,wrong_traces=run([False,False])
+  base=1+c['evidence_bonus']*.8-c['observation_cost']
+  self.assertAlmostEqual(mixed[0],base)
+  self.assertEqual(mixed[1],0.)
+  self.assertAlmostEqual(all_right[0],base-c['area_cost'])
+  self.assertAlmostEqual(all_right[1],base-c['area_cost']*.5)
+  self.assertAlmostEqual(all_wrong[0],c['all_wrong_area_bonus'])
+  self.assertAlmostEqual(all_wrong[1],c['all_wrong_area_bonus']*.5)
+  self.assertTrue(all(not r['group_all_correct'] and not r['group_all_wrong'] for r in mixed_traces))
+  self.assertTrue(all(r['group_all_correct'] and not r['group_all_wrong'] for r in all_traces))
+  self.assertTrue(all(not r['group_all_correct'] and r['group_all_wrong'] for r in wrong_traces))
  def test_group_normalization_and_loss(self):
   import torch
   a=relative_advantages([1,3,999],[True,True,False]);self.assertTrue(torch.allclose(a,torch.tensor([-1.,1.,0.]),atol=1e-5))

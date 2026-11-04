@@ -5,7 +5,7 @@ set -Eeuo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PHASE=smoke
 TRAIN_PYTHON="${SELFPLAY_TRAIN_PYTHON:-/mnt/source/chengqili/env/eav-selfplay-s92/bin/python}"
-TRAIN_CONFIG="${SELFPLAY_TRAIN_CONFIG:-configs/selfplay_s92.json}"
+TRAIN_CONFIG="${SELFPLAY_TRAIN_CONFIG:-configs/selfplay_s92_filtered.json}"
 OUTPUT_ROOT="$PROJECT_ROOT/outputs/cluster"
 while [[ $# -gt 0 ]]; do
   case "$1" in

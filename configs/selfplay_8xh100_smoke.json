@@ -51,5 +51,6 @@
   "server_start_timeout": 1800,
   "seed": 42,
   "require_both_labels": true,
-  "probe_crops_per_group": 1
+  "probe_crops_per_group": 1,
+  "all_wrong_area_bonus": 0.1
 }
