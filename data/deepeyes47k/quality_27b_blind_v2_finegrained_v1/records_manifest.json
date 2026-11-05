@@ -1,0 +1,30 @@
+{
+  "description": "Fine-grained perception subset of completed GT-blind recheck records",
+  "records": 11221,
+  "input_sha256": "94b945ffef92bcf59bac1c58667aa667596b0ebcd6a2e8dbd7e16288424ce4c2",
+  "files": {
+    "train_verified.jsonl": {
+      "sha256": "ef2bdd6b28cac88e647007072f6c566a4654b5c1bf88ccc66fe989207bd52160",
+      "bytes": 4274057,
+      "records": 11221
+    },
+    "correct_qids.txt": {
+      "sha256": "4d96695c080f7c1c95187864e28eeed3b74c9ab720477ef70a7a5352bfefb5d0",
+      "bytes": 729365,
+      "records": 11221
+    },
+    "selection.jsonl": {
+      "sha256": "12549bfbb2e714a67d02637355602e16bdd0d63fd405b25658bf4442761860c3",
+      "bytes": 2337250,
+      "records": 11221
+    },
+    "summary.json": {
+      "sha256": "994e1e2510f201861afa867b8cebd5944de439c6717a2e5dffee490119cf6267",
+      "bytes": 1824
+    },
+    "manifest.json": {
+      "sha256": "97edfd0611a1dd2bda93089753aaa68ef6dd668f2a102d80f9470fd5cd3da1e7",
+      "bytes": 1346
+    }
+  }
+}

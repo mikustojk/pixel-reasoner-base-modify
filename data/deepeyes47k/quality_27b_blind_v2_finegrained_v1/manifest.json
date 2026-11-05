@@ -1,0 +1,24 @@
+{
+  "dataset_kind": "filtered_task_subset",
+  "input": "/mnt/source/chengqili/pixel-reasoner-base-modify-next/data/deepeyes47k/quality_27b_blind_v2/train_verified.jsonl",
+  "input_sha256": "94b945ffef92bcf59bac1c58667aa667596b0ebcd6a2e8dbd7e16288424ce4c2",
+  "parent_summary": "/mnt/source/chengqili/pixel-reasoner-base-modify-next/data/deepeyes47k/quality_27b_blind_v2/summary.json",
+  "parent_summary_sha256": "ba0e4e7923fb7653ff69db44c20622a42c82f3bad3c30297403cad8593289422",
+  "provenance": "/mnt/source/chengqili/pixel-reasoner-base-modify/data/deepeyes47k/prepared_v2/row_audit.jsonl",
+  "provenance_sha256": "13b9b3a0a1785908ce396de2d2e191b7d6593618912939225e774bc3540b24ec",
+  "prepared_manifest": "/mnt/source/chengqili/pixel-reasoner-base-modify/data/deepeyes47k/prepared_v2/manifest.json",
+  "prepared_manifest_sha256": "01634a509f636d9a12bd48802cf2512adadcffd149df3a37ac62ede9588f618d",
+  "selection_rule": {
+    "parent_label": "correct",
+    "original_status": "train",
+    "data_source": "vstar"
+  },
+  "selection_method": "qid join with original retained training lineage; no question-text heuristic",
+  "parent_count": 21809,
+  "parent_counts_by_source": {
+    "vstar": 11221,
+    "thinklite_eureka": 5643,
+    "chart": 4945
+  },
+  "selection_script_sha256": "63738235cf825b7cae60d032828d42108acd703d6da75187f644716a884d1b93"
+}

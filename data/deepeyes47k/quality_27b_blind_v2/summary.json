@@ -1,0 +1,33 @@
+{
+  "input": "/mnt/source/chengqili/pixel-reasoner-base-modify/data/deepeyes47k/quality_27b_v1/train_verified.jsonl",
+  "input_sha256": "2f5184573f19ae0584627e3a84078dd346d42d78895e50820ae002eb5c702f75",
+  "source_count": 25073,
+  "selected_count": 25073,
+  "sample": 0,
+  "seed": 20261105,
+  "model_path": "/mnt/source/models/Qwen/Qwen3.8-27B",
+  "model_config_sha256": "191e0af232104ed8b65258cf3fb2b842e288008baca7633c11b82a1ac7203aab",
+  "prompt_version": "blind_nothink_then_think_v2",
+  "prompt_sha256": "33680eaa5153d326aac8a584a5756e08d7b5ce91adb037346a6eaa8d2a64e463",
+  "script_sha256": "ed224582c1fcbc0900e9c7a637eeaeee3821caa3a9344309d3bd4a6147b74a83",
+  "nothink_tokens": 1024,
+  "think_tokens": 12288,
+  "thinking_effort": "medium",
+  "temperature": 0,
+  "acceptance": "one_success_in_no_think_or_fallback_think",
+  "solve_sees_reference": false,
+  "comparison": "independent_text_only_reference_comparison",
+  "completed": true,
+  "counts": {
+    "correct": 21809,
+    "rejected": 3255,
+    "needs_review": 9
+  },
+  "accepted_by": {
+    "no_think": 12519,
+    "think": 9290
+  },
+  "thinking_attempts": 12554,
+  "verified_train_sha256": "94b945ffef92bcf59bac1c58667aa667596b0ebcd6a2e8dbd7e16288424ce4c2",
+  "finished_at_utc": "2026-11-05T09:24:42Z"
+}

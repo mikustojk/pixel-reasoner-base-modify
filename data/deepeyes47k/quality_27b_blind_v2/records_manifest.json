@@ -1,0 +1,35 @@
+{
+  "description": "Completed GT-blind recheck records",
+  "records": 21809,
+  "input_sha256": "2f5184573f19ae0584627e3a84078dd346d42d78895e50820ae002eb5c702f75",
+  "files": {
+    "train_verified.jsonl": {
+      "sha256": "94b945ffef92bcf59bac1c58667aa667596b0ebcd6a2e8dbd7e16288424ce4c2",
+      "bytes": 10391659,
+      "records": 21809
+    },
+    "correct.jsonl": {
+      "sha256": "88b0a5bd7e0f699406a39c747b30845bedfbb8c94a972437cde21a652c90887d",
+      "bytes": 46054844,
+      "records": 21809
+    },
+    "correct_qids.txt": {
+      "sha256": "c50db1634dce1cd42390152182b8810c7bd2ad249f57977b141eff8b32ceecc8",
+      "bytes": 1417585,
+      "records": 21809
+    },
+    "audit_index.jsonl": {
+      "sha256": "26cfa5ea270370762b83d37c376323687ebf9b5a7997f6a031b7061acf37be8f",
+      "bytes": 5485869,
+      "records": 25073
+    },
+    "summary.json": {
+      "sha256": "ba0e4e7923fb7653ff69db44c20622a42c82f3bad3c30297403cad8593289422",
+      "bytes": 1264
+    },
+    "manifest.json": {
+      "sha256": "9df368b7a0e738b82aa518e713774595f232e3860baf713119324463e00f0f38",
+      "bytes": 923
+    }
+  }
+}
